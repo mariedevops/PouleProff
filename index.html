@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PouleCheat — Eredivisie voorspellingen voor je Scorito poule</title>
+  <meta name="description" content="Genereer in één klik je Scorito-voorspelling voor elke Eredivisie wedstrijd. Vorm, onderlinge duels en thuisvoordeel — wij vertellen je wat je moet invullen." />
+  <meta name="keywords" content="Scorito, Eredivisie poule, voorspellingen, cheat sheet, voetbal pool" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <div class="brand-mark">PC</div>
+        <div>
+          <div class="brand-name">PouleCheat</div>
+          <div class="brand-tag">Eredivisie · Scorito helper</div>
+        </div>
+      </div>
+      <nav class="site-nav">
+        <a href="#predictor">Voorspeller</a>
+        <a href="#how">Hoe werkt het</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <h1>Vertel me gewoon wat ik moet invullen.</h1>
+      <p class="lead">
+        Geen tijd om alle stats uit te pluizen voor je Scorito-poule? Kies een Eredivisie-wedstrijd en wij geven je een
+        directe voorspelling — gebaseerd op vorm, onderlinge duels en thuisvoordeel.
+      </p>
+    </section>
+
+    <section id="predictor" class="card predictor">
+      <div class="match-selector">
+        <div class="field">
+          <label for="home-team">Thuis</label>
+          <select id="home-team"></select>
+        </div>
+        <div class="vs">vs</div>
+        <div class="field">
+          <label for="away-team">Uit</label>
+          <select id="away-team"></select>
+        </div>
+        <button id="predict-btn" class="primary">Voorspel</button>
+      </div>
+
+      <div id="result" class="result hidden">
+        <div class="result-headline">
+          <div class="team-block">
+            <div class="team-name" id="r-home-name"></div>
+            <div class="team-form" id="r-home-form"></div>
+          </div>
+          <div class="score-block">
+            <div class="score-label">Optimale Poule-voorspelling</div>
+            <div class="score" id="r-score">– : –</div>
+            <button id="copy-btn" class="ghost">Kopieer voor Scorito</button>
+          </div>
+          <div class="team-block">
+            <div class="team-name" id="r-away-name"></div>
+            <div class="team-form" id="r-away-form"></div>
+          </div>
+        </div>
+
+        <div class="prob-row">
+          <div class="prob">
+            <div class="prob-label">Winst thuis</div>
+            <div class="prob-bar"><div class="prob-fill home" id="r-prob-home-fill"></div></div>
+            <div class="prob-val" id="r-prob-home"></div>
+          </div>
+          <div class="prob">
+            <div class="prob-label">Gelijkspel</div>
+            <div class="prob-bar"><div class="prob-fill draw" id="r-prob-draw-fill"></div></div>
+            <div class="prob-val" id="r-prob-draw"></div>
+          </div>
+          <div class="prob">
+            <div class="prob-label">Winst uit</div>
+            <div class="prob-bar"><div class="prob-fill away" id="r-prob-away-fill"></div></div>
+            <div class="prob-val" id="r-prob-away"></div>
+          </div>
+        </div>
+
+        <div class="reasoning">
+          <h3>Waarom deze voorspelling?</h3>
+          <ul id="r-reasons"></ul>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <h4>Recente vorm (laatste 5)</h4>
+            <div class="stat-row"><span id="r-home-name-2"></span><span class="form-pills" id="r-home-pills"></span></div>
+            <div class="stat-row"><span id="r-away-name-2"></span><span class="form-pills" id="r-away-pills"></span></div>
+          </div>
+          <div class="stat-card">
+            <h4>Onderlinge duels (laatste 5)</h4>
+            <div class="h2h-list" id="r-h2h"></div>
+          </div>
+          <div class="stat-card">
+            <h4>Doelpunten gemiddeld</h4>
+            <div class="stat-row"><span id="r-home-name-3"></span><span id="r-home-goals"></span></div>
+            <div class="stat-row"><span id="r-away-name-3"></span><span id="r-away-goals"></span></div>
+            <div class="stat-row total"><span>Over/Under 2.5</span><span id="r-ou"></span></div>
+          </div>
+          <div class="stat-card">
+            <h4>Vertrouwen</h4>
+            <div class="confidence-meter">
+              <div class="confidence-fill" id="r-conf-fill"></div>
+            </div>
+            <div class="confidence-text" id="r-conf-text"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="how" class="card info">
+      <h2>Hoe werkt het?</h2>
+      <p>
+        We combineren vier signalen tot één voorspelling. Geen black box — je ziet precies waarom we deze pick geven.
+      </p>
+      <div class="how-grid">
+        <div>
+          <div class="how-num">1</div>
+          <h3>Recente vorm</h3>
+          <p>Punten uit de laatste 5 wedstrijden. Een team in flow krijgt een hogere kracht-score.</p>
+        </div>
+        <div>
+          <div class="how-num">2</div>
+          <h3>Aanval & verdediging</h3>
+          <p>Doelpunten voor en tegen per wedstrijd dit seizoen. Bepaalt de verwachte score.</p>
+        </div>
+        <div>
+          <div class="how-num">3</div>
+          <h3>Onderlinge duels</h3>
+          <p>De laatste 5 ontmoetingen. Sommige teams liggen elkaar gewoon beter.</p>
+        </div>
+        <div>
+          <div class="how-num">4</div>
+          <h3>Thuisvoordeel</h3>
+          <p>+10% kracht-bonus voor de thuisploeg. Eredivisie-stadions zijn een factor.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" class="card info">
+      <h2>FAQ</h2>
+      <details>
+        <summary>Is dit gegarandeerd correct?</summary>
+        <p>Nee. Geen enkele voorspelling is dat. We geven je de meest waarschijnlijke uitkomst op basis van data — handig om snel je poule in te vullen zonder zelf te graven.</p>
+      </details>
+      <details>
+        <summary>Welke data gebruiken jullie?</summary>
+        <p>Op dit moment hardcoded stats voor het huidige seizoen. Versie 2 koppelt aan API-Football voor live updates.</p>
+      </details>
+      <details>
+        <summary>Komt er ook F1 en EK/WK?</summary>
+        <p>Ja — F1 poule helper en toernooi-bracket-helpers staan op de roadmap. SEO-keywords als "F1 pool" en "EK poule" zijn next up.</p>
+      </details>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© 2026 PouleCheat · Niet gelieerd aan Scorito of de Eredivisie</span>
+    </div>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
