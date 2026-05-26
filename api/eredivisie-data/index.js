@@ -14,12 +14,12 @@ function apiFetch(endpoint, params) {
   return new Promise((resolve, reject) => {
     const query = new URLSearchParams(params).toString();
     const options = {
-      hostname: "api-football-v1.p.rapidapi.com",
+      hostname: "v3.football.api-sports.io",
       path: `/v3/${endpoint}?${query}`,
       method: "GET",
       headers: {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
-        "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com",
+        "X-RapidAPI-Host": "v3.football.api-sports.io",
       },
     };
     const req = https.request(options, (res) => {
