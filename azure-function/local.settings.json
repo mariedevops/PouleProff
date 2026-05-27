@@ -1,9 +1,0 @@
-{
-  "IsEncrypted": false,
-  "Values": {
-    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-    "FUNCTIONS_WORKER_RUNTIME": "node",
-    "RAPIDAPI_KEY": "e73d3c10146408044d9b07818bd0dfc1",
-    "AZURE_STORAGE_CONNECTION_STRING": "UseDevelopmentStorage=true"
-  }
-}

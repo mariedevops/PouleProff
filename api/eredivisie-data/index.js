@@ -1,40 +1,41 @@
-const { BlobServiceClient } = require("@azure/storage-blob");
 const https = require("https");
 
-const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
-const STORAGE_CONNECTION = process.env.AZURE_STORAGE_CONNECTION_STRING;
-const CONTAINER = "pouleproff-cache";
-const BLOB_NAME = "eredivisie.json";
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+// ── Config ────────────────────────────────────────────────────────────────────
+// Set APISPORTS_KEY in Azure Static Web Apps → Configuration → Application settings
+const API_KEY = process.env.APISPORTS_KEY;
 const EREDIVISIE_LEAGUE_ID = 88;
 const SEASON = 2024; // 2024-25 season
 
-// ── Use native https instead of fetch (works on all Node versions) ─────────────
+// ── API-Football fetch (api-sports.io direct, NOT RapidAPI) ───────────────────
+// Docs: https://www.api-football.com/documentation-v3#section/Authentication
+// Host: v3.football.api-sports.io
+// Auth header: x-apisports-key
 function apiFetch(endpoint, params) {
   return new Promise((resolve, reject) => {
     const query = new URLSearchParams(params).toString();
     const options = {
       hostname: "v3.football.api-sports.io",
-      path: `/v3/${endpoint}?${query}`,
+      path: `/${endpoint}?${query}`,       // NOTE: no /v3/ prefix — hostname already has v3
       method: "GET",
       headers: {
-        "X-RapidAPI-Key": RAPIDAPI_KEY,
-        "X-RapidAPI-Host": "v3.football.api-sports.io",
+        "x-apisports-key": API_KEY,        // correct header for direct api-sports.io access
       },
     };
+
     const req = https.request(options, (res) => {
       let data = "";
       res.on("data", (chunk) => { data += chunk; });
       res.on("end", () => {
         try {
           const json = JSON.parse(data);
+          // API-Football returns errors as an object in json.errors
           if (json.errors && Object.keys(json.errors).length > 0) {
             reject(new Error("API error: " + JSON.stringify(json.errors)));
           } else {
             resolve(json.response);
           }
         } catch (e) {
-          reject(new Error("JSON parse error: " + e.message));
+          reject(new Error("JSON parse error: " + e.message + " | raw: " + data.slice(0, 200)));
         }
       });
     });
@@ -43,57 +44,29 @@ function apiFetch(endpoint, params) {
   });
 }
 
-// ── Blob helpers ──────────────────────────────────────────────────────────────
-async function readCache(containerClient) {
-  try {
-    const blob = containerClient.getBlobClient(BLOB_NAME);
-    const exists = await blob.exists();
-    if (!exists) return null;
-    const buffer = await blob.downloadToBuffer();
-    const parsed = JSON.parse(buffer.toString());
-    const age = Date.now() - parsed.cachedAt;
-    if (age > CACHE_TTL_MS) return null;
-    console.log(`Cache hit (${Math.round(age / 60000)}min old)`);
-    return parsed;
-  } catch (e) {
-    console.error("Cache read error:", e.message);
-    return null;
-  }
-}
-
-async function writeCache(containerClient, data) {
-  try {
-    await containerClient.createIfNotExists({ access: "private" });
-    const blob = containerClient.getBlockBlobClient(BLOB_NAME);
-    const content = JSON.stringify(data);
-    await blob.upload(content, Buffer.byteLength(content), {
-      blobHTTPHeaders: { blobContentType: "application/json" },
-    });
-    console.log("Cache written");
-  } catch (e) {
-    console.error("Cache write error:", e.message);
-  }
-}
+// ── In-memory cache (survives warm function instances, resets on cold start) ──
+let _memCache = null;
+let _memCachedAt = 0;
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours — free tier: 100 req/day
 
 // ── Data builders ─────────────────────────────────────────────────────────────
 function buildForm(fixtures, teamId) {
-  const finished = fixtures
+  return fixtures
     .filter((f) =>
       f.fixture.status.short === "FT" &&
       (f.teams.home.id === teamId || f.teams.away.id === teamId)
     )
     .sort((a, b) => b.fixture.timestamp - a.fixture.timestamp)
     .slice(0, 5)
-    .reverse();
-
-  return finished.map((f) => {
-    const isHome = f.teams.home.id === teamId;
-    const gf = isHome ? f.goals.home : f.goals.away;
-    const ga = isHome ? f.goals.away : f.goals.home;
-    if (gf > ga) return "W";
-    if (gf < ga) return "L";
-    return "D";
-  });
+    .reverse()
+    .map((f) => {
+      const isHome = f.teams.home.id === teamId;
+      const gf = isHome ? f.goals.home : f.goals.away;
+      const ga = isHome ? f.goals.away : f.goals.home;
+      if (gf > ga) return "W";
+      if (gf < ga) return "L";
+      return "D";
+    });
 }
 
 function buildGoalAverages(fixtures, teamId) {
@@ -159,41 +132,48 @@ module.exports = async function (context, req) {
     "Cache-Control": "public, max-age=3600",
   };
 
-  // Serve from blob cache if fresh
-  let containerClient = null;
-  if (STORAGE_CONNECTION) {
-    try {
-      const blobService = BlobServiceClient.fromConnectionString(STORAGE_CONNECTION);
-      containerClient = blobService.getContainerClient(CONTAINER);
-      const cached = await readCache(containerClient);
-      if (cached) {
-        context.res = { status: 200, headers, body: JSON.stringify(cached) };
-        return;
-      }
-    } catch (e) {
-      console.error("Blob init error:", e.message);
-    }
+  // Serve from in-memory cache if still fresh
+  if (_memCache && (Date.now() - _memCachedAt) < CACHE_TTL_MS) {
+    context.log("Serving from memory cache");
+    context.res = { status: 200, headers, body: JSON.stringify(_memCache) };
+    return;
   }
 
-  // Fetch fresh data
-  try {
-    console.log("Fetching from API-Football, season", SEASON);
+  // Guard: API key must be configured
+  if (!API_KEY) {
+    context.res = {
+      status: 500,
+      headers,
+      body: JSON.stringify({
+        error: "APISPORTS_KEY environment variable is not set. Configure it in Azure Static Web Apps → Settings → Configuration.",
+      }),
+    };
+    return;
+  }
 
+  try {
+    context.log("Fetching fresh data from api-sports.io, season", SEASON);
+
+    // Fetch fixtures and standings in parallel (2 API calls of the 100/day free limit)
     const [fixtures, standingsResp] = await Promise.all([
       apiFetch("fixtures", { league: EREDIVISIE_LEAGUE_ID, season: SEASON }),
       apiFetch("standings", { league: EREDIVISIE_LEAGUE_ID, season: SEASON }),
     ]);
 
-    console.log(`Got ${fixtures.length} fixtures`);
+    context.log(`Fixtures received: ${fixtures.length}`);
 
-    // standings can be nested differently — handle both shapes
-    const standingsRaw = standingsResp[0]?.league?.standings || standingsResp[0]?.standings || [];
+    // standings shape: response[0].league.standings[0] = array of entries
+    const standingsRaw =
+      standingsResp[0]?.league?.standings?.[0] ||
+      standingsResp[0]?.league?.standings ||
+      [];
     const standings = Array.isArray(standingsRaw[0]) ? standingsRaw[0] : standingsRaw;
 
-    console.log(`Got ${standings.length} teams in standings`);
+    context.log(`Standings entries: ${standings.length}`);
 
-    // If standings empty, build teams from fixtures instead
+    // Build team map from standings (preferred) or fall back to fixture participants
     let teamsById = {};
+
     if (standings.length > 0) {
       standings.forEach((entry) => {
         const { id, name } = entry.team;
@@ -202,15 +182,16 @@ module.exports = async function (context, req) {
         teamsById[id] = {
           id, name,
           form: buildForm(fixtures, id),
-          gf: goals.gf, ga: goals.ga,
+          gf: goals.gf,
+          ga: goals.ga,
           homeWinRate: rates.homeWinRate,
           awayWinRate: rates.awayWinRate,
           rank: entry.rank,
         };
       });
     } else {
-      // Fallback: extract unique teams from fixtures
-      console.log("Standings empty — building teams from fixtures");
+      // Fallback: derive teams directly from fixture data
+      context.log("Standings empty — deriving teams from fixtures");
       const teamMap = {};
       fixtures.forEach((f) => {
         [
@@ -227,7 +208,8 @@ module.exports = async function (context, req) {
         teamsById[numId] = {
           id: numId, name,
           form: buildForm(fixtures, numId),
-          gf: goals.gf, ga: goals.ga,
+          gf: goals.gf,
+          ga: goals.ga,
           homeWinRate: rates.homeWinRate,
           awayWinRate: rates.awayWinRate,
           rank: idx + 1,
@@ -235,9 +217,11 @@ module.exports = async function (context, req) {
       });
     }
 
-    // H2H from fixtures (no extra API calls)
+    // Build H2H for the classic rivalries (from fixture data — no extra API calls)
     const teamIds = Object.keys(teamsById).map(Number);
-    const findId = (n) => teamIds.find((id) => teamsById[id]?.name?.toLowerCase().includes(n));
+    const findId = (substr) =>
+      teamIds.find((id) => teamsById[id]?.name?.toLowerCase().includes(substr));
+
     const ajaxId = findId("ajax");
     const psvId  = findId("psv");
     const feyId  = findId("feyenoord");
@@ -250,7 +234,7 @@ module.exports = async function (context, req) {
         if (matches.length) h2hData[`${a}|${b}`] = matches;
       });
 
-    // Upcoming fixtures
+    // Upcoming fixtures (next 20, not yet started)
     const now = Date.now() / 1000;
     const upcoming = fixtures
       .filter((f) => f.fixture.status.short === "NS" && f.fixture.timestamp > now)
@@ -275,15 +259,17 @@ module.exports = async function (context, req) {
       upcoming,
     };
 
-    if (containerClient) await writeCache(containerClient, payload);
+    // Store in memory cache
+    _memCache = payload;
+    _memCachedAt = Date.now();
 
     context.res = { status: 200, headers, body: JSON.stringify(payload) };
   } catch (err) {
-    console.error("Error:", err.message, err.stack);
+    context.log.error("Handler error:", err.message, err.stack);
     context.res = {
       status: 500,
       headers,
-      body: JSON.stringify({ error: err.message, stack: err.stack }),
+      body: JSON.stringify({ error: err.message }),
     };
   }
 };
