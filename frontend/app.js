@@ -128,9 +128,10 @@ function initLeagueTabs() {
         t.setAttribute("aria-selected", t.dataset.league === league ? "true" : "false");
       });
 
-      // Show/hide panels
-      document.getElementById("predictor").classList.toggle("hidden", league !== "eredivisie");
-      document.getElementById("f1-predictor").classList.toggle("hidden", league !== "f1");
+      // Show/hide all panels and their extras by data-panel attribute
+      document.querySelectorAll("#league-panels [data-panel]").forEach(el => {
+        el.classList.toggle("hidden", el.dataset.panel !== league);
+      });
 
       // Update brand tag
       const tagMap = { eredivisie: "Eredivisie · Scorito helper", f1: "Formule 1 · Race voorspeller" };
@@ -361,7 +362,10 @@ function renderUpcoming(upcoming) {
         </div>
       `).join("")}
     </div>`;
-  document.getElementById("predictor").after(section);
+  // Inject into the extras placeholder so it stays inside the Eredivisie panel group
+  const extras = document.getElementById("eredivisie-extras");
+  extras.innerHTML = "";
+  extras.appendChild(section);
 }
 
 function selectFixture(homeId, awayId) {
