@@ -462,7 +462,7 @@ details p {
   right: 0;
   z-index: 1000;
   background: var(--card);
-  border-top: 2px solid var(--accent);
+  border-top: 2px solid var(--orange);
   box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
   padding: 16px;
 }
@@ -477,11 +477,11 @@ details p {
 .cookie-text {
   flex: 1;
   font-size: 14px;
-  color: var(--fg);
+  color: var(--ink);
   margin: 0;
   min-width: 200px;
 }
-.cookie-text a { color: var(--accent); }
+.cookie-text a { color: var(--orange); }
 .cookie-actions {
   display: flex;
   gap: 8px;
@@ -511,12 +511,12 @@ button.small { padding: 8px 16px; font-size: 13px; }
   gap: 6px;
 }
 .league-tab:hover:not(.disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--orange);
+  color: var(--orange);
 }
 .league-tab.active {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--orange);
+  border-color: var(--orange);
   color: #fff;
 }
 .league-tab.disabled {
@@ -600,7 +600,7 @@ button.small { padding: 8px 16px; font-size: 13px; }
 /* Footer links */
 .footer-sep { margin: 0 8px; }
 .footer-link { color: var(--muted); text-decoration: none; }
-.footer-link:hover { color: var(--accent); }
+.footer-link:hover { color: var(--orange); }
 
 @media (max-width: 720px) {
   .cookie-inner { flex-direction: column; gap: 12px; }
