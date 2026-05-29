@@ -3,19 +3,40 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PouleProff — Eredivisie voorspellingen voor je Scorito poule</title>
-  <meta name="description" content="Genereer in één klik je Scorito-voorspelling voor elke Eredivisie wedstrijd. Vorm, onderlinge duels en thuisvoordeel — wij vertellen je wat je moet invullen." />
-  <meta name="keywords" content="Scorito, Eredivisie poule, voorspellingen, cheat sheet, voetbal pool" />
+  <title>PouleProff — Eredivisie & F1 voorspellingen voor je poule</title>
+  <meta name="description" content="Genereer in één klik je Scorito-voorspelling voor Eredivisie én F1 wedstrijden. Vorm, onderlinge duels en thuisvoordeel — wij vertellen je wat je moet invullen." />
+  <meta name="keywords" content="Scorito, Eredivisie poule, F1 poule, voorspellingen, cheat sheet, voetbal pool, formule 1 pool" />
   <link rel="stylesheet" href="styles.css" />
+
+  <!-- Plausible Analytics (privacy-first, geen cookies, AVG-proof) -->
+  <!-- Vervang 'white-meadow-0fd253110.7.azurestaticapps.net' met je eigen domein in Plausible dashboard -->
+  <script defer data-domain="white-meadow-0fd253110.7.azurestaticapps.net" src="https://plausible.io/js/script.js"></script>
 </head>
 <body>
+
+  <!-- ══ Cookie / disclaimer banner ══════════════════════════════════════════ -->
+  <div id="cookie-banner" class="cookie-banner" role="dialog" aria-live="polite" aria-label="Cookie-melding" hidden>
+    <div class="cookie-inner">
+      <p class="cookie-text">
+        <strong>🍪 Even kort:</strong> PouleProff gebruikt <strong>geen</strong> tracking-cookies.
+        We meten anoniem bezoekersaantallen via <a href="https://plausible.io" target="_blank" rel="noopener">Plausible</a>
+        — geen persoonlijke data, volledig AVG-conform.
+        <a href="#faq" id="cookie-more">Meer info</a>
+      </p>
+      <div class="cookie-actions">
+        <button id="cookie-accept" class="primary small">Prima, begrepen</button>
+        <button id="cookie-reject" class="ghost small">Liever niet</button>
+      </div>
+    </div>
+  </div>
+
   <header class="site-header">
     <div class="container header-inner">
       <div class="brand">
         <div class="brand-mark">PC</div>
         <div>
           <div class="brand-name">PouleProff</div>
-          <div class="brand-tag">Eredivisie · Scorito helper</div>
+          <div class="brand-tag" id="brand-tag">Eredivisie · Scorito helper</div>
         </div>
       </div>
       <nav class="site-nav">
@@ -30,12 +51,32 @@
     <section class="hero">
       <h1>Vertel me gewoon wat ik moet invullen.</h1>
       <p class="lead">
-        Geen tijd om alle stats uit te pluizen voor je Scorito-poule? Kies een Eredivisie-wedstrijd en wij geven je een
-        directe voorspelling — gebaseerd op vorm, onderlinge duels en thuisvoordeel.
+        Geen tijd om alle stats uit te pluizen voor je Scorito-poule? Kies een competitie en wedstrijd —
+        wij geven je een directe voorspelling op basis van vorm, onderlinge duels en thuisvoordeel.
       </p>
     </section>
 
-    <section id="predictor" class="card predictor">
+    <!-- ══ League switcher ══════════════════════════════════════════════════ -->
+    <div class="league-tabs" id="league-tabs" role="tablist" aria-label="Competitie kiezen">
+      <button class="league-tab active" data-league="eredivisie" role="tab" aria-selected="true">
+        ⚽ Eredivisie
+      </button>
+      <button class="league-tab" data-league="f1" role="tab" aria-selected="false">
+        🏎️ Formule 1
+        <span class="badge-new">Nieuw</span>
+      </button>
+      <button class="league-tab disabled" data-league="champions" role="tab" aria-selected="false" disabled>
+        🏆 Champions League
+        <span class="badge-soon">Binnenkort</span>
+      </button>
+      <button class="league-tab disabled" data-league="ek" role="tab" aria-selected="false" disabled>
+        🌍 EK / WK
+        <span class="badge-soon">Binnenkort</span>
+      </button>
+    </div>
+
+    <!-- ══ Eredivisie predictor ════════════════════════════════════════════ -->
+    <section id="predictor" class="card predictor" data-panel="eredivisie">
       <div class="match-selector">
         <div class="field">
           <label for="home-team">Thuis</label>
@@ -116,6 +157,68 @@
       </div>
     </section>
 
+    <!-- ══ F1 predictor panel ══════════════════════════════════════════════ -->
+    <section id="f1-predictor" class="card predictor hidden" data-panel="f1">
+      <div class="f1-selector">
+        <div class="field" style="flex:1">
+          <label for="f1-race">Grand Prix</label>
+          <select id="f1-race"></select>
+        </div>
+        <button id="f1-predict-btn" class="primary">Voorspel</button>
+      </div>
+
+      <div id="f1-result" class="result hidden">
+        <div class="f1-podium">
+          <div class="podium-step p2" id="f1-p2-block">
+            <div class="podium-pos">P2</div>
+            <div class="podium-name" id="f1-p2-name">–</div>
+            <div class="podium-team" id="f1-p2-team">–</div>
+          </div>
+          <div class="podium-step p1" id="f1-p1-block">
+            <div class="podium-pos">P1 🏆</div>
+            <div class="podium-name" id="f1-p1-name">–</div>
+            <div class="podium-team" id="f1-p1-team">–</div>
+          </div>
+          <div class="podium-step p3" id="f1-p3-block">
+            <div class="podium-pos">P3</div>
+            <div class="podium-name" id="f1-p3-name">–</div>
+            <div class="podium-team" id="f1-p3-team">–</div>
+          </div>
+        </div>
+
+        <div class="f1-copy-row">
+          <button id="f1-copy-btn" class="ghost">Kopieer voor Scorito poule</button>
+        </div>
+
+        <div class="reasoning">
+          <h3>Waarom deze voorspelling?</h3>
+          <ul id="f1-reasons"></ul>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <h4>Top-5 kans op winst</h4>
+            <div id="f1-win-probs"></div>
+          </div>
+          <div class="stat-card">
+            <h4>Circuit-voordeel</h4>
+            <div id="f1-circuit-notes"></div>
+          </div>
+          <div class="stat-card">
+            <h4>Coureurs kracht-score</h4>
+            <div id="f1-driver-strength"></div>
+          </div>
+          <div class="stat-card">
+            <h4>Vertrouwen</h4>
+            <div class="confidence-meter">
+              <div class="confidence-fill" id="f1-conf-fill"></div>
+            </div>
+            <div class="confidence-text" id="f1-conf-text"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="how" class="card info">
       <h2>Hoe werkt het?</h2>
       <p>
@@ -125,11 +228,11 @@
         <div>
           <div class="how-num">1</div>
           <h3>Recente vorm</h3>
-          <p>Punten uit de laatste 5 wedstrijden. Een team in flow krijgt een hogere kracht-score.</p>
+          <p>Punten uit de laatste 5 wedstrijden / races. Een team in flow krijgt een hogere kracht-score.</p>
         </div>
         <div>
           <div class="how-num">2</div>
-          <h3>Aanval & verdediging</h3>
+          <h3>Aanval &amp; verdediging</h3>
           <p>Doelpunten voor en tegen per wedstrijd dit seizoen. Bepaalt de verwachte score.</p>
         </div>
         <div>
@@ -139,8 +242,8 @@
         </div>
         <div>
           <div class="how-num">4</div>
-          <h3>Thuisvoordeel</h3>
-          <p>+10% kracht-bonus voor de thuisploeg. Eredivisie-stadions zijn een factor.</p>
+          <h3>Circuit / Thuisvoordeel</h3>
+          <p>+10% kracht-bonus voor de thuisploeg. Bij F1 telt circuit-specifieke performance.</p>
         </div>
       </div>
     </section>
@@ -153,22 +256,34 @@
       </details>
       <details>
         <summary>Welke data gebruiken jullie?</summary>
-        <p>Op dit moment hardcoded stats voor het huidige seizoen. Versie 2 koppelt aan API-Football voor live updates.</p>
+        <p>Eredivisie: hardcoded stats voor het huidige seizoen, via de Azure Function bijgehouden. F1: seizoen 2025 coureurs- en constructeursdata. Versie 2 koppelt aan live API's.</p>
       </details>
       <details>
-        <summary>Komt er ook F1 en EK/WK?</summary>
-        <p>Ja — F1 poule helper en toernooi-bracket-helpers staan op de roadmap. SEO-keywords als "F1 pool" en "EK poule" zijn next up.</p>
+        <summary>Gebruiken jullie cookies of tracking?</summary>
+        <p>
+          Wij gebruiken <strong>geen</strong> tracking-cookies en slaan geen persoonlijke gegevens op.
+          Voor anonieme bezoekerstellingen gebruiken we <a href="https://plausible.io" target="_blank" rel="noopener">Plausible Analytics</a>:
+          een privacy-vriendelijk alternatief voor Google Analytics dat volledig AVG-conform is.
+          Er worden geen cookies geplaatst en er vindt geen cross-site tracking plaats.
+        </p>
+      </details>
+      <details>
+        <summary>Komt er ook Champions League en EK/WK?</summary>
+        <p>Ja — Champions League en toernooi-bracket-helpers staan op de roadmap. F1 is live!</p>
       </details>
     </section>
   </main>
 
   <footer class="site-footer">
     <div class="container">
-      <span>© 2026 PouleProff · Niet gelieerd aan Scorito of de Eredivisie</span>
+      <span>© 2026 PouleProff · Niet gelieerd aan Scorito, de Eredivisie of Formula One Management</span>
+      <span class="footer-sep">·</span>
+      <a href="#faq" class="footer-link">Privacybeleid</a>
     </div>
   </footer>
 
   <script src="data.js"></script>
+  <script src="f1-data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

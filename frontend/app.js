@@ -1,5 +1,4 @@
-// PouleProff — prediction engine + UI
-// Works with data loaded via loadEredivisieData() from data.js
+// PouleProff — prediction engine + UI (v2: multi-league)
 
 // ── Form helpers ──────────────────────────────────────────────────────────────
 function formScore(form) {
@@ -11,7 +10,7 @@ function formLabel(form) {
   return `${pts} pts uit laatste 5`;
 }
 
-// ── Prediction engine ─────────────────────────────────────────────────────────
+// ── Eredivisie prediction engine ──────────────────────────────────────────────
 function predict(h, a, h2hMatches) {
   const hForm = formScore(h.form);
   const aForm = formScore(a.form);
@@ -29,7 +28,6 @@ function predict(h, a, h2hMatches) {
   xgHome *= 1.10;
   xgAway *= 0.92;
 
-  // H2H nudge
   let h2hNudge = { home: 0, away: 0, summary: null };
   if (h2hMatches && h2hMatches.length) {
     let hWins = 0, aWins = 0;
@@ -85,13 +83,67 @@ function renderPills(form) {
 function pct(n) { return `${Math.round(n * 100)}%`; }
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let _data   = null;   // loaded from API / fallback
-let _teams  = null;   // flat array sorted by name
-let _teamMap = null;  // id → team object
+let _data    = null;
+let _teams   = null;
+let _teamMap = null;
+let _f1Data  = null;
+let _activeLeague = "eredivisie";
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-async function init() {
-  // Show loading state
+// ── Cookie banner ─────────────────────────────────────────────────────────────
+function initCookieBanner() {
+  const CONSENT_KEY = "pp_cookie_consent";
+  const existing = localStorage.getItem(CONSENT_KEY);
+  if (existing) return; // already answered
+
+  const banner = document.getElementById("cookie-banner");
+  banner.hidden = false;
+
+  document.getElementById("cookie-accept").addEventListener("click", () => {
+    localStorage.setItem(CONSENT_KEY, "accepted");
+    banner.hidden = true;
+    // Fire Plausible custom event if desired
+    if (window.plausible) window.plausible("Cookie Accepted");
+  });
+
+  document.getElementById("cookie-reject").addEventListener("click", () => {
+    localStorage.setItem(CONSENT_KEY, "rejected");
+    banner.hidden = true;
+    // Optionally disable Plausible tracking by setting window._plausible_blocked = true
+    // Plausible is cookieless so this is mostly cosmetic, but respects intent.
+    window._plausible_blocked = true;
+  });
+}
+
+// ── League switcher ───────────────────────────────────────────────────────────
+function initLeagueTabs() {
+  document.querySelectorAll(".league-tab:not(.disabled)").forEach(tab => {
+    tab.addEventListener("click", () => {
+      const league = tab.dataset.league;
+      if (league === _activeLeague) return;
+      _activeLeague = league;
+
+      // Update tab states
+      document.querySelectorAll(".league-tab").forEach(t => {
+        t.classList.toggle("active", t.dataset.league === league);
+        t.setAttribute("aria-selected", t.dataset.league === league ? "true" : "false");
+      });
+
+      // Show/hide panels
+      document.getElementById("predictor").classList.toggle("hidden", league !== "eredivisie");
+      document.getElementById("f1-predictor").classList.toggle("hidden", league !== "f1");
+
+      // Update brand tag
+      const tagMap = { eredivisie: "Eredivisie · Scorito helper", f1: "Formule 1 · Race voorspeller" };
+      document.getElementById("brand-tag").textContent = tagMap[league] || "Scorito helper";
+
+      // Track with Plausible
+      if (window.plausible) window.plausible("League Switch", { props: { league } });
+    });
+  });
+}
+
+// ── Eredivisie init ───────────────────────────────────────────────────────────
+async function initEredivisie() {
   document.getElementById("predict-btn").disabled = true;
   document.getElementById("predict-btn").textContent = "Data laden…";
 
@@ -99,7 +151,6 @@ async function init() {
   _teamMap = getTeams(_data);
   _teams = Object.values(_teamMap).sort((a, b) => a.name.localeCompare(b.name, "nl"));
 
-  // Populate selects
   const homeSel = document.getElementById("home-team");
   const awaySel = document.getElementById("away-team");
   _teams.forEach(t => {
@@ -107,7 +158,6 @@ async function init() {
     const o2 = document.createElement("option"); o2.value = t.id; o2.textContent = t.name; awaySel.appendChild(o2);
   });
 
-  // Default to Ajax vs PSV (or first two teams)
   const ajaxId = _teams.find(t => t.name.toLowerCase().includes("ajax"))?.id || _teams[0]?.id;
   const psvId  = _teams.find(t => t.name.toLowerCase().includes("psv"))?.id  || _teams[1]?.id;
   homeSel.value = ajaxId;
@@ -118,7 +168,6 @@ async function init() {
   document.getElementById("predict-btn").addEventListener("click", runPrediction);
   document.getElementById("copy-btn").addEventListener("click", copyForScorito);
 
-  // Show data freshness banner if using fallback
   if (_data.isFallback) {
     const banner = document.createElement("div");
     banner.style.cssText = "background:#fef3c7;color:#92400e;padding:8px 16px;text-align:center;font-size:0.85rem;";
@@ -131,14 +180,36 @@ async function init() {
     document.querySelector(".site-header").after(updated);
   }
 
-  // Populate upcoming fixtures if present
   const upcoming = getUpcoming(_data);
   if (upcoming.length) renderUpcoming(upcoming);
-
   runPrediction();
 }
 
-// ── Run prediction ────────────────────────────────────────────────────────────
+// ── F1 init ───────────────────────────────────────────────────────────────────
+async function initF1() {
+  const btn = document.getElementById("f1-predict-btn");
+  btn.disabled = true;
+  btn.textContent = "Data laden…";
+
+  _f1Data = await loadF1Data();
+  populateF1Selector(_f1Data);
+
+  btn.disabled = false;
+  btn.textContent = "Voorspel";
+
+  if (_f1Data.isFallback) {
+    const warn = document.getElementById("f1-predictor").querySelector(".f1-selector");
+    const note = document.createElement("p");
+    note.style.cssText = "font-size:13px;color:#92400e;background:#fef3c7;padding:6px 10px;border-radius:6px;margin-top:8px;";
+    note.textContent = "⚠️ Live F1-data tijdelijk niet beschikbaar — fallback wordt gebruikt.";
+    warn.after(note);
+  }
+
+  document.getElementById("f1-predict-btn").addEventListener("click", runF1Prediction);
+  document.getElementById("f1-copy-btn").addEventListener("click", copyF1ForScorito);
+}
+
+// ── Run Eredivisie prediction ─────────────────────────────────────────────────
 function runPrediction() {
   const homeId = Number(document.getElementById("home-team").value);
   const awayId = Number(document.getElementById("away-team").value);
@@ -193,9 +264,62 @@ function runPrediction() {
                           "Laag — toss-up, kies voorzichtig";
 
   document.getElementById("result").classList.remove("hidden");
+  if (window.plausible) window.plausible("Eredivisie Prediction");
 }
 
-// ── Copy for Scorito ──────────────────────────────────────────────────────────
+// ── Run F1 prediction ─────────────────────────────────────────────────────────
+function runF1Prediction() {
+  const raceId = document.getElementById("f1-race").value;
+  const r = predictF1(raceId, _f1Data);
+  if (!_f1Data) return;
+  if (!r) return;
+
+  // Podium
+  const podiumDrivers = [r.top3[1], r.top3[0], r.top3[2]]; // P2, P1, P3 visual order
+  ["p2","p1","p3"].forEach((pos, i) => {
+    const d = podiumDrivers[i];
+    document.getElementById(`f1-${pos}-name`).textContent = d.name;
+    document.getElementById(`f1-${pos}-team`).textContent = d.team;
+    document.getElementById(`f1-${pos}-block`).style.borderColor = d.teamColor;
+  });
+
+  // Win probability bars (top 5)
+  document.getElementById("f1-win-probs").innerHTML = r.top5.map(d =>
+    `<div class="stat-row">
+      <span style="color:${d.teamColor};font-weight:600">${d.name}</span>
+      <div class="prob-bar" style="flex:1;margin:0 8px"><div class="prob-fill home" style="width:${pct(d.winProb)};background:${d.teamColor}"></div></div>
+      <span>${pct(d.winProb)}</span>
+    </div>`
+  ).join("");
+
+  // Circuit notes
+  document.getElementById("f1-circuit-notes").innerHTML =
+    `<p style="font-size:14px;color:var(--muted);margin:0">${r.race.notes}</p>
+     <p style="font-size:13px;margin:8px 0 0"><strong>Type:</strong> ${r.race.circuitType}</p>`;
+
+  // Driver strength scores
+  document.getElementById("f1-driver-strength").innerHTML = r.top5.map(d =>
+    `<div class="stat-row">
+      <span>${d.name}</span>
+      <span style="color:${d.teamColor};font-weight:600">${(d.totalScore * 100).toFixed(0)}</span>
+    </div>`
+  ).join("");
+
+  // Confidence
+  document.getElementById("f1-conf-fill").style.width = `${Math.round(r.confidence * 100)}%`;
+  document.getElementById("f1-conf-text").textContent =
+    r.confidence > 0.5 ? `Hoog — ${r.top3[0].name} is duidelijke favoriet` :
+    r.confidence > 0.2 ? "Gemiddeld — spannende race verwacht" :
+                         "Laag — open race, verrassingen mogelijk";
+
+  // Reasons
+  document.getElementById("f1-reasons").innerHTML = r.reasons.map(t => `<li>${t}</li>`).join("");
+
+  document.getElementById("f1-result").classList.remove("hidden");
+  if (window.plausible) window.plausible("F1 Prediction", { props: { race: r.race.name } });
+}
+
+// ── Copy helpers ──────────────────────────────────────────────────────────────
 function copyForScorito() {
   const homeId = Number(document.getElementById("home-team").value);
   const awayId = Number(document.getElementById("away-team").value);
@@ -204,12 +328,22 @@ function copyForScorito() {
   const h2h = getH2HById(_data, homeId, awayId);
   const r = predict(h, a, h2h);
   const text = `${h.name} ${r.predHome}-${r.predAway} ${a.name}`;
-  navigator.clipboard.writeText(text).then(() => {
-    const btn = document.getElementById("copy-btn");
-    const orig = btn.textContent;
-    btn.textContent = "Gekopieerd ✓";
-    setTimeout(() => { btn.textContent = orig; }, 1500);
-  });
+  navigator.clipboard.writeText(text).then(() => flashBtn("copy-btn", "Gekopieerd ✓", "Kopieer voor Scorito"));
+}
+
+function copyF1ForScorito() {
+  const raceId = document.getElementById("f1-race").value;
+  const r = predictF1(raceId, _f1Data);
+  if (!_f1Data) return;
+  if (!r) return;
+  const text = `F1 ${r.race.name}: 1. ${r.top3[0].name} 2. ${r.top3[1].name} 3. ${r.top3[2].name}`;
+  navigator.clipboard.writeText(text).then(() => flashBtn("f1-copy-btn", "Gekopieerd ✓", "Kopieer voor Scorito poule"));
+}
+
+function flashBtn(id, tempText, origText) {
+  const btn = document.getElementById(id);
+  btn.textContent = tempText;
+  setTimeout(() => { btn.textContent = origText; }, 1500);
 }
 
 // ── Upcoming fixtures panel ───────────────────────────────────────────────────
@@ -237,4 +371,10 @@ function selectFixture(homeId, awayId) {
   document.getElementById("predictor").scrollIntoView({ behavior: "smooth" });
 }
 
-document.addEventListener("DOMContentLoaded", init);
+// ── Main init ─────────────────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", async () => {
+  initCookieBanner();
+  initLeagueTabs();
+  await initEredivisie();
+  initF1();
+});
