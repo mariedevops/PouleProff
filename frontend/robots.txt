@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://www.pouleproff.nl/sitemap.xml
+
+# Block API endpoints from indexing (they return JSON, not useful for search)
+Disallow: /api/
